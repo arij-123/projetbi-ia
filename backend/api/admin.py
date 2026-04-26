@@ -128,3 +128,48 @@ async def get_admin_stats(
         "total_users": total_users,
         "total_doctors": total_doctors
     }
+
+@router.put("/users/{user_id}")  # Note: removed "/admin" prefix
+async def update_user(
+    user_id: str,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    is_admin(current_user)
+    
+    from uuid import UUID
+    try:
+        user = db.query(User).filter(User.id == UUID(user_id)).first()
+    except ValueError:
+        raise HTTPException(400, "Invalid user ID format")
+    
+    if not user:
+        raise HTTPException(404, "Utilisateur introuvable")
+    
+    # Update fields
+    user.first_name = data.get("first_name", user.first_name)
+    user.last_name  = data.get("last_name",  user.last_name)
+    user.age        = data.get("age",         user.age)
+    user.phone      = data.get("phone",       user.phone)
+    user.city       = data.get("city",        user.city)
+    user.location   = data.get("location",    user.location)
+    user.email      = data.get("email",       user.email)
+    user.role       = data.get("role",        user.role)
+    
+    if data.get("password"):
+        user.password_hash = hash_password(data["password"])
+    
+    db.commit()
+    db.refresh(user)  # Good practice to refresh after commit
+    
+    return {
+        "message": "Utilisateur mis à jour",
+        "user": {
+            "id": str(user.id),
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "email": user.email,
+            "role": user.role
+        }
+    }

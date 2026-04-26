@@ -9,154 +9,147 @@ export default function Login() {
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [focusedField, setFocusedField] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-
     try {
       const res = await fetch("http://localhost:8000/api/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          email: email,
-          password: password
-        })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
-
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || "Login failed");
+        const err = await res.json();
+        throw new Error(err.detail || "Login failed");
       }
-
       const data = await res.json();
-
-      // 🔥 Sauvegarder le token ET les informations utilisateur
       localStorage.setItem("token", data.access_token);
-      
-      // Sauvegarder les infos utilisateur si présentes
-      if (data.user) {
-        localStorage.setItem("user", JSON.stringify(data.user));
-        console.log("Utilisateur sauvegardé:", data.user);
-      } else {
-        // Si le backend ne retourne pas user, faire un appel supplémentaire
-        console.warn("Backend didn't return user data");
-      }
-
-      // Redirection après login
+      if (data.user) localStorage.setItem("user", JSON.stringify(data.user));
       navigate("/predict");
-
     } catch (err) {
       setError(err.message);
-      console.log(err);
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div style={styles.page}>
-      {/* Arrière-plan hexagonal */}
-      <div style={styles.bgOverlay}>
-        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style={{ opacity: 0.08 }}>
-          <defs>
-            <pattern id="hex" x="0" y="0" width="60" height="52" patternUnits="userSpaceOnUse">
-              <polygon
-                points="30,2 58,17 58,47 30,62 2,47 2,17"
-                fill="none"
-                stroke="white"
-                strokeWidth="1"
-              />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#hex)" />
-        </svg>
-      </div>
+  const inputStyle = (field) => ({
+    ...S.input,
+    borderColor: focusedField === field
+      ? "rgba(96,165,250,0.5)"
+      : "rgba(255,255,255,0.08)",
+    background: focusedField === field
+      ? "rgba(96,165,250,0.05)"
+      : "rgba(255,255,255,0.03)",
+    boxShadow: focusedField === field
+      ? "0 0 0 3px rgba(96,165,250,0.08)"
+      : "none",
+  });
 
-      {/* Carte de login */}
-      <div style={styles.card}>
+  return (
+    <div style={S.root}>
+      <style>{kf}</style>
+
+      {/* Ambient orbs */}
+      <div style={S.orb1} />
+      <div style={S.orb2} />
+      <div style={S.orb3} />
+
+      {/* Grid pattern */}
+      <svg style={S.gridSvg} width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="grid" x="0" y="0" width="48" height="48" patternUnits="userSpaceOnUse">
+            <path d="M 48 0 L 0 0 0 48" fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid)" />
+      </svg>
+
+      {/* Card */}
+      <div style={S.card}>
+        <div style={S.cardTopGlow} />
+
         {/* Logo */}
-        <div style={styles.logoWrapper}>
-          <div style={styles.logoCircle}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-              <circle cx="11" cy="11" r="7" stroke="white" strokeWidth="2" />
-              <line x1="16.5" y1="16.5" x2="21" y2="21" stroke="white" strokeWidth="2" strokeLinecap="round" />
-              <circle cx="11" cy="11" r="3" fill="white" opacity="0.4" />
-            </svg>
+        <div style={S.logoWrap}>
+          <div style={S.logoRing}>
+            <div style={S.logoIcon}>
+              <svg width="22" height="22" fill="none" stroke="#60a5fa" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+            </div>
           </div>
-          <h1 style={styles.title}>Skin Disease Detection</h1>
-          <p style={styles.subtitle}>AI-Powered Dermatology Diagnosis</p>
+          <div style={S.liveBadge}>
+            <span style={S.liveDot} />
+            Système actif
+          </div>
+          <h1 style={S.title}>Bienvenue sur<br /><span style={S.titleAccent}>SkinAI</span></h1>
+          <p style={S.subtitle}>Intelligence artificielle · Diagnostic dermatologique</p>
         </div>
 
-        {/* Formulaire */}
-        <form onSubmit={handleSubmit} style={styles.form}>
+        {/* Divider */}
+        <div style={S.divider} />
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} style={S.form}>
+
           {/* Email */}
-          <div style={styles.fieldGroup}>
-            <label style={styles.label}>Email address</label>
-            <div style={styles.inputWrapper}>
-              <svg style={styles.inputIcon} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9aa5b4" strokeWidth="2">
-                <rect x="2" y="4" width="20" height="16" rx="2" />
-                <path d="m2 7 10 7 10-7" />
-              </svg>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Adresse email</label>
+            <div style={S.inputWrap}>
+              <span style={S.inputIcon}>
+                <svg width="15" height="15" fill="none" stroke="#475569" viewBox="0 0 24 24" strokeWidth={2}>
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <path d="m2 7 10 7 10-7" />
+                </svg>
+              </span>
               <input
                 type="email"
-                placeholder="Enter your email"
+                placeholder="vous@exemple.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={e => setEmail(e.target.value)}
                 required
-                style={styles.input}
-                onFocus={(e) => {
-                  e.target.style.borderColor = "#1a6bb5";
-                  e.target.style.background = "white";
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = "#e2e8f0";
-                  e.target.style.background = "#f8fafc";
-                }}
+                style={inputStyle("email")}
+                onFocus={() => setFocusedField("email")}
+                onBlur={() => setFocusedField(null)}
               />
             </div>
           </div>
 
-          {/* Mot de passe */}
-          <div style={styles.fieldGroup}>
-            <label style={styles.label}>Password</label>
-            <div style={styles.inputWrapper}>
-              <svg style={styles.inputIcon} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9aa5b4" strokeWidth="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
+          {/* Password */}
+          <div style={S.fieldGroup}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <label style={S.label}>Mot de passe</label>
+              <a href="/forgot-password" style={S.forgotLink}>Mot de passe oublié ?</a>
+            </div>
+            <div style={S.inputWrap}>
+              <span style={S.inputIcon}>
+                <svg width="15" height="15" fill="none" stroke="#475569" viewBox="0 0 24 24" strokeWidth={2}>
+                  <rect x="3" y="11" width="18" height="11" rx="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              </span>
               <input
                 type={showPassword ? "text" : "password"}
-                placeholder="Enter your password"
+                placeholder="••••••••"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={e => setPassword(e.target.value)}
                 required
-                style={{ ...styles.input, paddingRight: "42px" }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = "#1a6bb5";
-                  e.target.style.background = "white";
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = "#e2e8f0";
-                  e.target.style.background = "#f8fafc";
-                }}
+                style={{ ...inputStyle("password"), paddingRight: "44px" }}
+                onFocus={() => setFocusedField("password")}
+                onBlur={() => setFocusedField(null)}
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                style={styles.eyeBtn}
-              >
+              <button type="button" onClick={() => setShowPassword(v => !v)} style={S.eyeBtn}>
                 {showPassword ? (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9aa5b4" strokeWidth="2">
+                  <svg width="15" height="15" fill="none" stroke="#475569" viewBox="0 0 24 24" strokeWidth={2}>
                     <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
                     <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
                     <line x1="1" y1="1" x2="23" y2="23" />
                   </svg>
                 ) : (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9aa5b4" strokeWidth="2">
+                  <svg width="15" height="15" fill="none" stroke="#475569" viewBox="0 0 24 24" strokeWidth={2}>
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                     <circle cx="12" cy="12" r="3" />
                   </svg>
@@ -165,205 +158,243 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Remember me + Forgot password */}
-          <div style={styles.row}>
-            <label style={styles.checkLabel}>
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
-                style={styles.checkbox}
-              />
-              Remember me
-            </label>
-            <a href="/forgot-password" style={styles.link}>
-              Forgot password?
-            </a>
-          </div>
+          {/* Remember me */}
+          <label style={S.checkRow}>
+            <div style={{ position: "relative" }}>
+              <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} style={{ display: "none" }} />
+              <div style={{ ...S.checkbox, ...(remember ? S.checkboxChecked : {}) }}
+                onClick={() => setRemember(v => !v)}>
+                {remember && <span style={S.checkMark}>✓</span>}
+              </div>
+            </div>
+            <span style={S.checkLabel}>Se souvenir de moi</span>
+          </label>
 
-          {/* Affichage erreur */}
+          {/* Error */}
           {error && (
-            <div style={styles.errorMessage}>
-              {error}
+            <div style={S.errorBox}>
+              <span style={{ fontSize: "16px" }}>⚠</span>
+              <span>{error}</span>
             </div>
           )}
 
-          {/* Bouton Log in */}
-          <button type="submit" style={styles.submitBtn} disabled={loading}>
-            {loading ? "Connexion en cours..." : "Log in"}
+          {/* Submit */}
+          <button
+            type="submit"
+            disabled={loading}
+            style={{ ...S.submitBtn, ...(loading ? S.submitBtnLoading : {}) }}
+          >
+            {loading ? (
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
+                <span style={S.spinner} /> Connexion en cours…
+              </span>
+            ) : (
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+                Se connecter <span style={{ fontSize: "16px" }}>→</span>
+              </span>
+            )}
           </button>
         </form>
 
-        {/* Lien Sign up */}
-        <p style={styles.signupText}>
-          Don't have an account?{" "}
-          <a href="/register" style={styles.signupLink}>
-            Sign up
-          </a>
+        {/* Sign up */}
+        <p style={S.signupText}>
+          Pas encore de compte ?{" "}
+          <a href="/register" style={S.signupLink}>Créer un compte</a>
         </p>
       </div>
     </div>
   );
 }
 
-const styles = {
-  page: {
+const kf = `
+  @keyframes orbFloat { 0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-30px) scale(1.05);} }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.3;transform:scale(1.5);} }
+  @keyframes spin { to{transform:rotate(360deg);} }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);} }
+  @keyframes shimmer { 0%{background-position:-200% center;}100%{background-position:200% center;} }
+`;
+
+const S = {
+  root: {
     minHeight: "100vh",
-    background: "linear-gradient(135deg, #1a6bb5 0%, #0d4a8a 40%, #0a3570 100%)",
+    background: "#050d1a",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "2rem",
+    padding: "24px",
     position: "relative",
     overflow: "hidden",
-    fontFamily: "'Segoe UI', sans-serif",
+    fontFamily: "'Segoe UI', system-ui, sans-serif",
   },
-  bgOverlay: {
-    position: "absolute",
-    inset: 0,
-    pointerEvents: "none",
-  },
+
+  /* Orbs */
+  orb1: { position: "fixed", top: "-160px", right: "-80px", width: "500px", height: "500px", background: "radial-gradient(circle,rgba(59,130,246,0.2) 0%,transparent 70%)", borderRadius: "50%", pointerEvents: "none", animation: "orbFloat 13s ease-in-out infinite" },
+  orb2: { position: "fixed", bottom: "-120px", left: "-80px", width: "420px", height: "420px", background: "radial-gradient(circle,rgba(34,211,165,0.12) 0%,transparent 70%)", borderRadius: "50%", pointerEvents: "none", animation: "orbFloat 17s ease-in-out infinite reverse" },
+  orb3: { position: "fixed", top: "40%", left: "30%", width: "600px", height: "600px", background: "radial-gradient(circle,rgba(99,102,241,0.06) 0%,transparent 70%)", borderRadius: "50%", pointerEvents: "none" },
+
+  gridSvg: { position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 },
+
+  /* Card */
   card: {
-    background: "white",
-    borderRadius: "20px",
-    padding: "2.5rem 2rem",
+    position: "relative", zIndex: 1,
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.09)",
+    borderRadius: "28px",
+    padding: "40px 36px",
     width: "100%",
     maxWidth: "420px",
-    boxShadow: "0 24px 60px rgba(0,0,0,0.25)",
-    position: "relative",
-    zIndex: 1,
+    backdropFilter: "blur(20px)",
+    WebkitBackdropFilter: "blur(20px)",
+    boxShadow: "0 32px 80px rgba(0,0,0,0.5)",
+    animation: "fadeIn 0.7s cubic-bezier(0.22,1,0.36,1) forwards",
+    overflow: "hidden",
   },
-  logoWrapper: {
-    textAlign: "center",
-    marginBottom: "2rem",
+  cardTopGlow: {
+    position: "absolute", top: 0, left: "50%",
+    transform: "translateX(-50%)",
+    width: "65%", height: "1px",
+    background: "linear-gradient(90deg,transparent,rgba(96,165,250,0.7),transparent)",
   },
-  logoCircle: {
-    width: "64px",
-    height: "64px",
-    borderRadius: "50%",
-    background: "linear-gradient(135deg, #1a6bb5, #0d4a8a)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    margin: "0 auto 1rem",
+
+  /* Logo section */
+  logoWrap: { textAlign: "center", marginBottom: "28px" },
+  logoRing: {
+    width: "68px", height: "68px",
+    borderRadius: "22px",
+    background: "linear-gradient(135deg,rgba(59,130,246,0.15),rgba(99,102,241,0.15))",
+    border: "1px solid rgba(96,165,250,0.25)",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    margin: "0 auto 16px",
+    boxShadow: "0 0 28px rgba(59,130,246,0.15)",
+  },
+  logoIcon: {
+    width: "44px", height: "44px",
+    borderRadius: "14px",
+    background: "rgba(59,130,246,0.1)",
+    display: "flex", alignItems: "center", justifyContent: "center",
+  },
+  liveBadge: {
+    display: "inline-flex", alignItems: "center", gap: "7px",
+    padding: "4px 14px",
+    border: "1px solid rgba(34,211,165,0.25)",
+    borderRadius: "100px",
+    fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase",
+    color: "#22d3a5",
+    background: "rgba(34,211,165,0.06)",
+    marginBottom: "14px",
+  },
+  liveDot: {
+    width: "6px", height: "6px",
+    background: "#22d3a5", borderRadius: "50%",
+    boxShadow: "0 0 6px #22d3a5",
+    display: "inline-block",
+    animation: "pulse 2s ease-in-out infinite",
   },
   title: {
-    fontSize: "22px",
-    fontWeight: 700,
-    color: "#0d2d5e",
-    margin: "0 0 6px",
+    fontSize: "26px", fontWeight: "800",
+    color: "#f1f5f9", lineHeight: 1.2,
+    marginBottom: "8px",
+    fontFamily: "'Georgia', serif",
+    letterSpacing: "-0.02em",
   },
-  subtitle: {
-    fontSize: "13px",
-    color: "#6b7a99",
-    margin: 0,
+  titleAccent: {
+    background: "linear-gradient(135deg,#60a5fa 0%,#22d3a5 100%)",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
   },
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "1rem",
+  subtitle: { fontSize: "12px", color: "#475569", letterSpacing: "0.04em" },
+
+  divider: {
+    height: "1px",
+    background: "rgba(255,255,255,0.06)",
+    margin: "0 0 24px",
   },
-  fieldGroup: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "6px",
-  },
-  label: {
-    fontSize: "13px",
-    color: "#4a5568",
-    fontWeight: 500,
-  },
-  inputWrapper: {
-    position: "relative",
-  },
+
+  /* Form */
+  form: { display: "flex", flexDirection: "column", gap: "18px" },
+  fieldGroup: { display: "flex", flexDirection: "column", gap: "7px" },
+  label: { fontSize: "11px", fontWeight: "700", color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" },
+  forgotLink: { fontSize: "11px", color: "#6366f1", fontWeight: "600", textDecoration: "none" },
+
+  inputWrap: { position: "relative" },
   inputIcon: {
-    position: "absolute",
-    left: "14px",
-    top: "50%",
+    position: "absolute", left: "14px", top: "50%",
     transform: "translateY(-50%)",
+    display: "flex", alignItems: "center",
     pointerEvents: "none",
   },
   input: {
-    width: "100%",
-    boxSizing: "border-box",
-    padding: "11px 14px 11px 42px",
-    border: "1.5px solid #e2e8f0",
-    borderRadius: "10px",
-    fontSize: "14px",
-    color: "#2d3748",
-    background: "#f8fafc",
+    width: "100%", boxSizing: "border-box",
+    padding: "12px 14px 12px 42px",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "12px",
+    fontSize: "14px", color: "#e2e8f0",
+    background: "rgba(255,255,255,0.03)",
     outline: "none",
-    transition: "border-color 0.2s, background 0.2s",
+    transition: "all 0.2s",
   },
   eyeBtn: {
-    position: "absolute",
-    right: "12px",
-    top: "50%",
+    position: "absolute", right: "12px", top: "50%",
     transform: "translateY(-50%)",
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    padding: "4px",
-    display: "flex",
-    alignItems: "center",
+    background: "none", border: "none", cursor: "pointer",
+    padding: "4px", display: "flex", alignItems: "center",
+    color: "#475569",
   },
-  row: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  checkLabel: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    fontSize: "13px",
-    color: "#4a5568",
-    cursor: "pointer",
-  },
+
+  /* Checkbox */
+  checkRow: { display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", userSelect: "none" },
   checkbox: {
-    width: "15px",
-    height: "15px",
-    accentColor: "#1a6bb5",
-    cursor: "pointer",
+    width: "18px", height: "18px",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: "6px",
+    background: "rgba(255,255,255,0.03)",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    cursor: "pointer", flexShrink: 0,
+    transition: "all 0.2s",
   },
-  link: {
-    fontSize: "13px",
-    color: "#1a6bb5",
-    textDecoration: "none",
-    fontWeight: 500,
+  checkboxChecked: {
+    background: "rgba(96,165,250,0.2)",
+    border: "1px solid rgba(96,165,250,0.5)",
   },
-  errorMessage: {
-    padding: "10px",
-    background: "#fee",
-    border: "1px solid #fcc",
-    borderRadius: "8px",
-    color: "#c33",
-    fontSize: "13px",
-    textAlign: "center",
-  },
-  submitBtn: {
-    width: "100%",
-    padding: "13px",
-    background: "linear-gradient(135deg, #1a6bb5, #0d4a8a)",
-    color: "white",
-    border: "none",
+  checkMark: { fontSize: "11px", color: "#60a5fa", fontWeight: "700", lineHeight: 1 },
+  checkLabel: { fontSize: "13px", color: "#64748b" },
+
+  /* Error */
+  errorBox: {
+    display: "flex", alignItems: "center", gap: "10px",
+    padding: "12px 14px",
+    background: "rgba(248,113,113,0.08)",
+    border: "1px solid rgba(248,113,113,0.2)",
     borderRadius: "10px",
-    fontSize: "15px",
-    fontWeight: 600,
-    cursor: "pointer",
-    letterSpacing: "0.3px",
-    marginTop: "0.5rem",
-    transition: "opacity 0.3s",
+    color: "#f87171", fontSize: "13px",
   },
-  signupText: {
-    textAlign: "center",
-    marginTop: "1.5rem",
-    fontSize: "13px",
-    color: "#6b7a99",
+
+  /* Submit */
+  submitBtn: {
+    width: "100%", padding: "13px",
+    background: "linear-gradient(135deg,#3b82f6,#6366f1)",
+    border: "none", borderRadius: "12px",
+    color: "white", fontSize: "14px", fontWeight: "700",
+    cursor: "pointer", letterSpacing: "0.02em",
+    boxShadow: "0 4px 20px rgba(59,130,246,0.4)",
+    transition: "opacity 0.2s, transform 0.15s",
+    marginTop: "4px",
   },
-  signupLink: {
-    color: "#1a6bb5",
-    fontWeight: 600,
-    textDecoration: "none",
+  submitBtnLoading: {
+    background: "rgba(255,255,255,0.06)",
+    boxShadow: "none", cursor: "not-allowed",
+    color: "#475569",
   },
+  spinner: {
+    width: "16px", height: "16px",
+    border: "2px solid rgba(255,255,255,0.2)",
+    borderTop: "2px solid white",
+    borderRadius: "50%",
+    display: "inline-block",
+    animation: "spin 0.8s linear infinite",
+  },
+
+  /* Signup */
+  signupText: { textAlign: "center", marginTop: "22px", fontSize: "13px", color: "#475569" },
+  signupLink: { color: "#60a5fa", fontWeight: "700", textDecoration: "none" },
 };

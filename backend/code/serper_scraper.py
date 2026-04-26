@@ -1,8 +1,8 @@
 # serper_scraper_advanced.py
 import requests
 import time
-from database import SessionLocal
-from models import Doctor
+from backend.core.database import SessionLocal
+from backend.models.models import Doctor
 import uuid
 
 # ============================================================

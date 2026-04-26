@@ -161,3 +161,34 @@ def get_weighted_score_recommendations(db: Session, limit: int = 10):
     results.sort(key=lambda x: x['weighted_score'], reverse=True)
     
     return results[:limit]
+
+
+def get_bayesian_recommendations(db: Session, limit: int = 10, m: int = 5):
+    from sqlalchemy import func
+
+    doctors = db.query(Doctor).all()
+
+    if not doctors:
+        return []
+
+    # moyenne globale C
+    C = db.query(func.avg(Doctor.avg_rating)).scalar() or 0
+
+    results = []
+
+    for doctor in doctors:
+        R = doctor.avg_rating or 0
+        v = doctor.rating_count or 0
+
+        score = ((v / (v + m)) * R) + ((m / (v + m)) * C) if (v + m) > 0 else C
+
+        results.append({
+            "doctor": doctor,
+            "score": score,
+            "R": R,
+            "v": v
+        })
+
+    results.sort(key=lambda x: x["score"], reverse=True)
+
+    return results[:limit]
