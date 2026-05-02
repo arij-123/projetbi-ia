@@ -2,193 +2,191 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from backend.models.models import Doctor, Rating, Maladie, Soin, User
+import uuid
 
 # ─────────────────────────────────────
 # ⭐ UPDATE DOCTOR RATING
 # ─────────────────────────────────────
 def update_doctor_rating(db: Session, doctor_id):
     try:
-        result = db.query(
-            func.avg(Rating.score),
-            func.count(Rating.id)
-        ).filter(Rating.doctor_id == doctor_id).first()
-
         doctor = db.query(Doctor).filter(Doctor.id == doctor_id).first()
         if not doctor:
             return None
 
-        avg_val = result[0] if result[0] is not None else 0.0
-        count_val = result[1] if result[1] is not None else 0
+        # Avis réels des users
+        real_result = db.query(
+            func.avg(Rating.score),
+            func.count(Rating.id)
+        ).filter(
+            Rating.doctor_id == doctor_id,
+            Rating.is_external == False
+        ).first()
 
-        doctor.avg_rating = round(float(avg_val), 2)
-        doctor.rating_count = count_val
+        real_avg   = float(real_result[0]) if real_result[0] is not None else None
+        real_count = int(real_result[1])   if real_result[1] is not None else 0
+
+        # Valeurs scrapées Maps — sauvegardées, jamais écrasées
+        ext_avg   = doctor.scraped_avg_rating   or 0
+        ext_count = doctor.scraped_rating_count or 0
+
+        # Moyenne pondérée : (somme scrapée + somme réelle) / total
+        total_count = real_count + ext_count
+
+        if total_count == 0:
+            final_avg = 0.0
+        else:
+            weighted_sum = 0.0
+            if real_avg is not None:
+                weighted_sum += real_avg * real_count
+            if ext_avg:
+                weighted_sum += ext_avg * ext_count
+            final_avg = weighted_sum / total_count
+
+        print(f"📊 {doctor.first_name}: {real_count} réels + {ext_count} Maps → {final_avg:.2f}")
+
+        doctor.avg_rating   = round(final_avg, 2)
+        doctor.rating_count = total_count
 
         db.commit()
         db.refresh(doctor)
         return doctor
+
     except Exception as e:
         db.rollback()
         raise e
-
-
 # ─────────────────────────────────────
 # ⭐ ADD / UPDATE RATING
 # ─────────────────────────────────────
 def add_rating(db: Session, user_id, doctor_id, score: int, comment: str = None):
+
+    # Sécurité UUID
+    if isinstance(doctor_id, str):
+        doctor_id = uuid.UUID(doctor_id)
+    if isinstance(user_id, str):
+        user_id = uuid.UUID(user_id)
+
     # Validation du score
     if not 1 <= score <= 5:
         raise ValueError("Le score doit être entre 1 et 5")
-    
+
     # Vérifier que le docteur existe
     doctor = db.query(Doctor).filter(Doctor.id == doctor_id).first()
     if not doctor:
         raise ValueError(f"Docteur {doctor_id} non trouvé")
-    
-    # Vérifier si l'utilisateur existe
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise ValueError(f"Utilisateur {user_id} non trouvé")
-    
-    # Vérifier si un avis existe déjà
+
+    # Vérifier si CET utilisateur a déjà noté CE docteur (avis réel uniquement)
     existing = db.query(Rating).filter(
         Rating.user_id == user_id,
-        Rating.doctor_id == doctor_id
+        Rating.doctor_id == doctor_id,
+        Rating.is_external == False     # ← On ne touche JAMAIS aux avis externes
     ).first()
-    
+
     if existing:
-        existing.score = score
+        # Mise à jour de l'avis existant
+        existing.score   = score
         existing.comment = comment
-        db.commit()
     else:
-        rating = Rating(
+        # ✅ FIX: new_rating est bien DANS le else, et db.add aussi
+        new_rating = Rating(
             user_id=user_id,
             doctor_id=doctor_id,
             score=score,
-            comment=comment
+            comment=comment,
+            is_external=False
         )
-        db.add(rating)
-        db.commit()
-    
-    # Mettre à jour la note du docteur
+        db.add(new_rating)  # ← était en dehors du else, c'était le bug principal
+
+    db.flush()
+
     return update_doctor_rating(db, doctor_id)
 
 
 # ─────────────────────────────────────
 # 🧠 RECOMMEND (doctors + soins)
 # ─────────────────────────────────────
-# services.py - MODIFIEZ cette fonction
-# services.py - REMPLACEZ la fonction recommend
-
 def recommend(db: Session, maladie_nom: str, limit: int = 5):
     """Recommandation avec score pondéré"""
-    
-    # Nettoyer le nom de la maladie (remplacer _ par espace)
+
     maladie_nom_clean = maladie_nom.replace('_', ' ')
-    
+
     maladie = db.query(Maladie).filter(Maladie.nom == maladie_nom_clean).first()
     if not maladie:
         print(f"⚠️ Maladie non trouvée: {maladie_nom_clean}")
         return None
 
-    # Utiliser la fonction de score pondéré
     weighted_results = get_weighted_score_recommendations(db, limit=limit)
-    
-    # Extraire les docteurs
     doctors = [item['doctor'] for item in weighted_results] if weighted_results else []
-    
+
     print(f"👨‍⚕️ {len(doctors)} médecins recommandés (score pondéré)")
-    
-    # Récupérer les soins
+
     soins = db.query(Soin).filter(Soin.maladie_id == maladie.id).all()
-    
+
     return {
         "maladie": maladie_nom,
         "medecins": doctors,
         "soins": soins,
     }
-# services.py - Ajoutez cette fonction
 
-# services.py - CORRIGEZ cette fonction
 
+# ─────────────────────────────────────
+# 📊 WEIGHTED SCORE RECOMMENDATIONS
+# ─────────────────────────────────────
 def get_weighted_score_recommendations(db: Session, limit: int = 10):
     """
-    Recommandation avec score pondéré basé sur le dataset
-    - Note moyenne: 70%
-    - Popularité (nombre d'avis): 30%
+    Recommandation avec score pondéré :
+    - Note moyenne : 70%
+    - Popularité (nombre d'avis) : 30%
     """
-    
-    # Récupérer les médecins
-    query = db.query(Doctor)
-    
-   
-    
-    # ⚠️ NE PAS exclure les notes nulles - gardez tous les médecins
-    # query = query.filter(Doctor.avg_rating > 0)  # ← COMMENTEZ ou SUPPRIMEZ cette ligne
-    
-    doctors = query.all()
-    
+    doctors = db.query(Doctor).all()
+
     print(f"📊 Nombre de médecins trouvés: {len(doctors)}")
-    for d in doctors[:5]:
-        print(f"   - {d.first_name} {d.last_name}: note={d.avg_rating}, avis={d.rating_count}")
-    
+
     if not doctors:
         return []
-    
-    # Normaliser les notes
-    max_rating = max([d.avg_rating for d in doctors]) if doctors else 1
-    max_reviews = max([d.rating_count for d in doctors]) if doctors else 1
-    
-    print(f"📈 Max note: {max_rating}, Max avis: {max_reviews}")
-    
+
+    max_rating  = max((d.avg_rating  or 0) for d in doctors) or 1
+    max_reviews = max((d.rating_count or 0) for d in doctors) or 1
+
     results = []
     for doctor in doctors:
-        # Score normalisé (0-1)
-        rating_score = doctor.avg_rating / max_rating if max_rating > 0 else 0
-        reviews_score = doctor.rating_count / max_reviews if max_reviews > 0 else 0
-        
-        # Score pondéré: 70% note + 30% popularité
+        rating_score  = (doctor.avg_rating   or 0) / max_rating
+        reviews_score = (doctor.rating_count or 0) / max_reviews
         weighted_score = (rating_score * 0.7) + (reviews_score * 0.3)
-        print(weighted_score)
-        
+
         results.append({
-            'doctor': doctor,
+            'doctor':         doctor,
             'weighted_score': round(weighted_score, 3),
-            'rating_score': round(rating_score, 3),
-            'reviews_score': round(reviews_score, 3)
+            'rating_score':   round(rating_score, 3),
+            'reviews_score':  round(reviews_score, 3),
         })
-    
-    # Trier par score pondéré
+
     results.sort(key=lambda x: x['weighted_score'], reverse=True)
-    
     return results[:limit]
 
 
+# ─────────────────────────────────────
+# 🧮 BAYESIAN RECOMMENDATIONS
+# ─────────────────────────────────────
 def get_bayesian_recommendations(db: Session, limit: int = 10, m: int = 5):
-    from sqlalchemy import func
-
     doctors = db.query(Doctor).all()
 
     if not doctors:
         return []
 
-    # moyenne globale C
     C = db.query(func.avg(Doctor.avg_rating)).scalar() or 0
 
     results = []
-
     for doctor in doctors:
-        R = doctor.avg_rating or 0
+        R = doctor.avg_rating  or 0
         v = doctor.rating_count or 0
-
         score = ((v / (v + m)) * R) + ((m / (v + m)) * C) if (v + m) > 0 else C
 
         results.append({
             "doctor": doctor,
-            "score": score,
-            "R": R,
-            "v": v
+            "score":  score,
+            "R":      R,
+            "v":      v,
         })
 
     results.sort(key=lambda x: x["score"], reverse=True)
-
     return results[:limit]

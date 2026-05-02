@@ -76,7 +76,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.email == user.email).first()
     if not db_user or not verify_password(user.password, db_user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = create_token({"user_id": db_user.email})
+    token = create_token({"user_id": str(db_user.id)})   
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -99,7 +99,7 @@ def register(user: UserRegister, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    token = create_token({"user_id": new_user.email})
+    token = create_token({"user_id": str(new_user.id)})
     return {"message": "User created successfully", "access_token": token, "token_type": "bearer"}
 
 # ─────────────────────────────
@@ -173,30 +173,42 @@ async def get_prediction_stats(db: Session = Depends(get_db), current_user: User
 # ─────────────────────────────
 # RATINGS
 # ─────────────────────────────
+import uuid
+
 @router.post("/ratings")
-async def create_or_update_rating(rating_data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_or_update_rating(
+    rating_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     try:
-        doctor_id = rating_data.get("doctor_id")
+        doctor_id = uuid.UUID(rating_data.get("doctor_id"))  # ✅ FIX
         score = rating_data.get("score")
         comment = rating_data.get("comment", "")
-        if not doctor_id:
-            raise HTTPException(status_code=400, detail="doctor_id requis")
+
         if not score or not 1 <= score <= 5:
             raise HTTPException(status_code=400, detail="Score doit être entre 1 et 5")
-        updated_doctor = add_rating(db=db, user_id=current_user.id, doctor_id=doctor_id, score=score, comment=comment)
-        return {"success": True, "message": "Avis enregistré avec succès",
-                "doctor": {"id": str(updated_doctor.id), "avg_rating": updated_doctor.avg_rating, "rating_count": updated_doctor.rating_count}}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+
+        updated_doctor = add_rating(
+            db=db,
+            user_id=current_user.id,  # déjà UUID ✅
+            doctor_id=doctor_id,
+            score=score,
+            comment=comment
+        )
+
+        return {
+            "success": True,
+            "doctor": {
+                "id": str(updated_doctor.id),
+                "avg_rating": updated_doctor.avg_rating,
+                "rating_count": updated_doctor.rating_count
+            }
+        }
+
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/user-rating/{doctor_id}")
-async def get_user_rating(doctor_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    rating = db.query(Rating).filter(Rating.user_id == current_user.id, Rating.doctor_id == doctor_id).first()
-    return {"has_rated": rating is not None, "score": rating.score if rating else None, "comment": rating.comment if rating else None}
-
 # ─────────────────────────────
 # RECOMMENDATIONS
 # ─────────────────────────────
@@ -263,7 +275,25 @@ async def get_recommendations(maladie_nom: str, limit: int = 5, db: Session = De
 @router.get("/doctors")
 def get_doctors(db: Session = Depends(get_db)):
     return db.query(Doctor).all()
+# ─────────────────────────────
+# liste rate
+# ─────────────────────────────
 
+@router.get("/ratings/{doctor_id}")
+def get_doctor_ratings(doctor_id: str, db: Session = Depends(get_db)):
+    import uuid
+    doctor_uuid = uuid.UUID(doctor_id)
+
+    ratings = db.query(Rating).filter(Rating.doctor_id == doctor_uuid).all()
+
+    return [
+        {
+            "user_id": str(r.user_id),
+            "score": r.score,
+            "comment": r.comment
+        }
+        for r in ratings
+    ]
 # ─────────────────────────────
 # INCLUDE ROUTER
 # ─────────────────────────────

@@ -41,53 +41,9 @@ def run_doctors_eda(file_path="data/doctors_export.csv"):
     plt.close()
     print("✅ Saved: data/rating_distribution.png")
     
+
     # ============================================
-    # 2. Categorical Analysis: Impact sur les notes (par ville)
-    # ============================================
-    categorical_features = ['city', 'specialty']
-    
-    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
-    axes = axes.flatten()
-    
-    for i, feature in enumerate(categorical_features):
-        if feature in df.columns:
-            # Top 10 villes pour la lisibilité
-            if feature == 'city':
-                top_cities = df['city'].value_counts().head(10).index
-                df_filtered = df[df['city'].isin(top_cities)]
-            else:
-                df_filtered = df
-            
-            sns.boxplot(x=feature, y='avg_rating', data=df_filtered, ax=axes[i], palette='Set2')
-            axes[i].set_title(f'Distribution des notes par {feature}', fontsize=12)
-            axes[i].set_xlabel(feature, fontsize=10)
-            axes[i].set_ylabel('Note moyenne', fontsize=10)
-            axes[i].tick_params(axis='x', rotation=45)
-    
-    plt.tight_layout()
-    plt.savefig('data/categorical_impact.png', dpi=150, bbox_inches='tight')
-    plt.close()
-    print("✅ Saved: data/categorical_impact.png")
-    
-    # ============================================
-    # 3. Numerical Analysis: Boxplots
-    # ============================================
-    numerical_features = ['avg_rating', 'rating_count']
-    
-    plt.figure(figsize=(12, 5))
-    for i, feature in enumerate(numerical_features):
-        plt.subplot(1, 2, i+1)
-        sns.boxplot(y=df[feature], palette='Set2')
-        plt.title(f'Distribution de {feature}', fontsize=12)
-        plt.ylabel(feature, fontsize=10)
-    
-    plt.tight_layout()
-    plt.savefig('data/numerical_boxplots.png', dpi=150, bbox_inches='tight')
-    plt.close()
-    print("✅ Saved: data/numerical_boxplots.png")
-    
-    # ============================================
-    # 4. Top Cities Analysis
+    # 2. Top Cities Analysis
     # ============================================
     plt.figure(figsize=(12, 6))
     city_counts = df['city'].value_counts().head(10)
@@ -102,7 +58,7 @@ def run_doctors_eda(file_path="data/doctors_export.csv"):
     print("✅ Saved: data/top_cities.png")
     
     # ============================================
-    # 5. Top Doctors
+    # 3. Top Doctors
     # ============================================
     plt.figure(figsize=(12, 6))
     top_doctors = df.nlargest(10, 'avg_rating')
@@ -119,23 +75,9 @@ def run_doctors_eda(file_path="data/doctors_export.csv"):
     plt.close()
     print("✅ Saved: data/top_doctors.png")
     
+   
     # ============================================
-    # 6. Rating vs Reviews Scatter Plot
-    # ============================================
-    plt.figure(figsize=(10, 6))
-    scatter = plt.scatter(df['rating_count'], df['avg_rating'], 
-                         c=df['avg_rating'], cmap='viridis', alpha=0.6, s=50)
-    plt.colorbar(scatter, label='Note moyenne')
-    plt.title('Relation: Note vs Nombre d\'avis', fontsize=14)
-    plt.xlabel('Nombre d\'avis', fontsize=12)
-    plt.ylabel('Note moyenne', fontsize=12)
-    plt.grid(True, alpha=0.3)
-    plt.savefig('data/rating_vs_reviews.png', dpi=150, bbox_inches='tight')
-    plt.close()
-    print("✅ Saved: data/rating_vs_reviews.png")
-    
-    # ============================================
-    # 7. Rating Categories (Pie Chart)
+    # 4. Rating Categories (Pie Chart)
     # ============================================
     bins = [0, 3, 3.5, 4, 4.5, 4.8, 5]
     labels = ['<3.0', '3.0-3.5', '3.5-4.0', '4.0-4.5', '4.5-4.8', '4.8-5.0']
@@ -150,20 +92,9 @@ def run_doctors_eda(file_path="data/doctors_export.csv"):
     plt.close()
     print("✅ Saved: data/rating_categories.png")
     
-    # ============================================
-    # 8. Correlation Heatmap
-    # ============================================
-    plt.figure(figsize=(8, 6))
-    numeric_cols = ['avg_rating', 'rating_count']
-    corr = df[numeric_cols].corr()
-    sns.heatmap(corr, annot=True, cmap='coolwarm', fmt='.2f', linewidths=0.5, vmin=-1, vmax=1)
-    plt.title('Matrice de corrélation', fontsize=14)
-    plt.savefig('data/correlation_heatmap.png', dpi=150, bbox_inches='tight')
-    plt.close()
-    print("✅ Saved: data/correlation_heatmap.png")
     
     # ============================================
-    # 9. City Rating Analysis (Bar Chart)
+    # 5. City Rating Analysis (Bar Chart)
     # ============================================
     plt.figure(figsize=(14, 6))
     city_rating = df.groupby('city')['avg_rating'].mean().sort_values(ascending=False).head(15)
@@ -176,20 +107,7 @@ def run_doctors_eda(file_path="data/doctors_export.csv"):
     plt.savefig('data/city_rating.png', dpi=150, bbox_inches='tight')
     plt.close()
     print("✅ Saved: data/city_rating.png")
-    
-    # ============================================
-    # 10. Reviews Distribution (Histogram)
-    # ============================================
-    plt.figure(figsize=(10, 6))
-    df[df['rating_count'] < 100]['rating_count'].hist(bins=30, color='purple', alpha=0.7, edgecolor='black')
-    plt.title('Distribution du nombre d\'avis (<100)', fontsize=14)
-    plt.xlabel('Nombre d\'avis', fontsize=12)
-    plt.ylabel('Nombre de médecins', fontsize=12)
-    plt.grid(True, alpha=0.3)
-    plt.savefig('data/reviews_distribution.png', dpi=150, bbox_inches='tight')
-    plt.close()
-    print("✅ Saved: data/reviews_distribution.png")
-    
+        
     # ============================================
     # Statistics Summary
     # ============================================
@@ -224,15 +142,10 @@ def run_doctors_eda(file_path="data/doctors_export.csv"):
     
     print("\n📁 Fichiers générés dans le dossier 'data/':")
     print("   - rating_distribution.png")
-    print("   - categorical_impact.png")
-    print("   - numerical_boxplots.png")
     print("   - top_cities.png")
     print("   - top_doctors.png")
-    print("   - rating_vs_reviews.png")
     print("   - rating_categories.png")
-    print("   - correlation_heatmap.png")
     print("   - city_rating.png")
-    print("   - reviews_distribution.png")
 
 if __name__ == "__main__":
     run_doctors_eda("doctors_export.csv")

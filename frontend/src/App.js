@@ -6,15 +6,22 @@ import Predict from "./pages/Predict.jsx";
 import Doctors from "./pages/Doctors.jsx";
 import History from "./pages/History.jsx";
 import Admin from "./pages/Admin.jsx";
+import AdminDashboard from "./pages/AdminDashboard";
 
 import "./index.css";
 
-// Composant pour protéger les routes
+// Composant pour protéger les routes (non-admins uniquement)
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("token");
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
   
   if (!token) {
     return <Navigate to="/login" replace />;
+  }
+  
+  // Si admin, rediriger vers son dashboard
+  if (user.role === "admin") {
+    return <Navigate to="/admin/dashboard" replace />;
   }
   
   return children;
@@ -36,6 +43,23 @@ function AdminRoute({ children }) {
   return children;
 }
 
+// Redirection intelligente basée sur le rôle
+function NavigateBasedOnRole() {
+  const token = localStorage.getItem("token");
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  // Admin → Dashboard, sinon → Predict
+  if (user.role === "admin") {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+  
+  return <Navigate to="/predict" replace />;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -43,7 +67,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Signup />} />
 
-      {/* Routes protégées (tous utilisateurs connectés) */}
+      {/* Routes protégées (uniquement pour non-admins) */}
       <Route path="/predict" element={
         <ProtectedRoute>
           <Predict />
@@ -62,16 +86,22 @@ export default function App() {
         </ProtectedRoute>
       } />
       
-      {/* Route admin (réservée aux administrateurs) */}
+      {/* Routes admin */}
       <Route path="/admin" element={
         <AdminRoute>
           <Admin />
         </AdminRoute>
       } />
 
-      {/* Redirection par défaut */}
-      <Route path="/" element={<Navigate to="/predict" />} />
-      <Route path="*" element={<Navigate to="/predict" />} />
+      <Route path="/admin/dashboard" element={
+        <AdminRoute>
+          <AdminDashboard />
+        </AdminRoute>
+      } />
+
+      {/* Redirection par défaut intelligente */}
+      <Route path="/" element={<NavigateBasedOnRole />} />
+      <Route path="*" element={<NavigateBasedOnRole />} />
     </Routes>
   );
 }

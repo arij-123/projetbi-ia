@@ -63,14 +63,16 @@ export default function Header() {
     return { admin: S.roleAdmin, doctor: S.roleDoctor }[user.role] || S.roleDefault;
   };
 
-  const navItems = [
-    { label: "Prédiction", path: "/predict", icon: "⬡" },
-    { label: "Médecins", path: "/doctors", icon: "⚕" },
-    { label: "Historique", path: "/history", icon: "◈" },
-    ...(user?.role === "doctor" ? [{ label: "Rendez-vous", path: "/my-appointments", icon: "◉" }] : []),
-    ...(user?.role === "admin" ? [{ label: "Utilisateurs", path: "/admin", icon: "◆" }] : []),
-  ];
-
+const navItems = [
+  { label: "Prédiction", path: "/predict", icon: "⬡" },
+  { label: "Médecins", path: "/doctors", icon: "⚕" },
+  { label: "Historique", path: "/history", icon: "◈" },
+  ...(user?.role === "doctor" ? [{ label: "Rendez-vous", path: "/my-appointments", icon: "◉" }] : []),
+  ...(user?.role === "admin" ? [
+    { label: "Utilisateurs", path: "/admin", icon: "◆" },
+    { label: "Dashboard", path: "/admin/dashboard", icon: "📊" }
+  ] : [])
+];
   const isActive = (path) => location.pathname === path;
 
   if (loading) {

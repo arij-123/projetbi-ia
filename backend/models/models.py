@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, Integer, ForeignKey, UniqueConstraint, Text,DateTime
+from sqlalchemy import Column, String, Float, Integer, Boolean,ForeignKey, UniqueConstraint, Text,DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -55,7 +55,8 @@ class Doctor(Base):
 
     avg_rating = Column(Float, default=0)
     rating_count = Column(Integer, default=0)   # NOUVEAU
-
+    scraped_avg_rating = Column(Float, default=0)
+    scraped_rating_count = Column(Integer, default=0)
     # relations
     ratings = relationship("Rating", back_populates="doctor")
 
@@ -75,6 +76,8 @@ class Rating(Base):
 
     score = Column(Integer, nullable=False)  # 1 → 5 ⭐
     comment = Column(String(255))
+
+    is_external = Column(Boolean, default=False)  # 🔥 AJOUTER CETTE LIGNE
 
     # relations
     user = relationship("User", back_populates="ratings")
