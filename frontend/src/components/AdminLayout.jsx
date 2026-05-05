@@ -14,10 +14,12 @@ export default function AdminLayout({ children }) {
   };
 
   const menuItems = [
-    { label: "Dashboard", path: "/admin/dashboard", icon: "📊" },
-    { label: "Utilisateurs", path: "/admin", icon: "👥" },
-    { label: "Médecins", path: "/doctors", icon: "⚕️" },
     { label: "Prédictions", path: "/predict", icon: "🔮" },
+  { label: "Médecins", path: "/doctors", icon: "⚕" },
+  { label: "Historique", path: "/history", icon: "◈" },
+    { label: "Dashboard", path: "/admin/dashboard", icon: "📊" }
+
+  
   ];
 
   return (

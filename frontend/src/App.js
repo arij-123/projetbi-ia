@@ -19,11 +19,7 @@ function ProtectedRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
   
-  // Si admin, rediriger vers son dashboard
-  if (user.role === "admin") {
-    return <Navigate to="/admin/dashboard" replace />;
-  }
-  
+
   return children;
 }
 
