@@ -50,23 +50,47 @@ CLASS_NAMES = [
     "Melanocytic_Nevi", "Melanoma", "Psoriasis", "Tinea_Ringworm", "Warts_Molluscum"
 ]
 
-# ─────────────────────────────
-# MODEL
-# ─────────────────────────────
-def load_model():
-    model = models.resnet50(weights=None)
-    model.fc = nn.Sequential(nn.Dropout(0.4), nn.Linear(model.fc.in_features, 9))
-    model.load_state_dict(torch.load("backend/model/final_model3.pth", map_location="cpu"))
-    model.eval()
-    return model
 
-model = load_model()
-
+# ─────────────────────────────
+# TRANSFORMATIONS (AJOUTER ICI !)
+# ─────────────────────────────
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
+# ─────────────────────────────
+# MODEL (VERSION AMÉLIORÉE)
+# ─────────────────────────────
+import torch.nn.functional as F
+
+# Paramètres OOD (à ajuster selon ta calibration)
+OOD_CONFIDENCE_THRESHOLD = 0.55   # seuil confidence
+OOD_ENTROPY_THRESHOLD = 1.8       # seuil entropie
+
+def load_model():
+    """Charge le meilleur modèle entraîné (EfficientNet-B3 ou ResNet-50)"""
+    
+    # Option 1: EfficientNet-B3 (recommandé si c'est ton winner)
+    """Charge ResNet-50 (meilleur modèle)"""
+    model = models.resnet50(weights=None)
+     # Modifier la couche finale (9 classes)
+    in_features = model.fc.in_features
+    model.fc = nn.Sequential(
+        nn.Dropout(0.4),
+        nn.Linear(in_features, 9)
+    )
+    model.load_state_dict(torch.load("backend/model/final_model5.pth", map_location="cpu"))
+    
+    # Option 2: ResNet-50 (si c'est ton winner)
+    # model = models.resnet50(weights=None)
+    # model.fc = nn.Sequential(nn.Dropout(0.4), nn.Linear(model.fc.in_features, 9))
+    # model.load_state_dict(torch.load("backend/model/final_model.pth", map_location="cpu"))
+    
+    model.eval()
+    return model
+
+model = load_model()
 
 # ─────────────────────────────
 # AUTH
@@ -105,44 +129,125 @@ def register(user: UserRegister, db: Session = Depends(get_db)):
 # ─────────────────────────────
 # PREDICT
 # ─────────────────────────────
+# ─────────────────────────────
+# PREDICT AVEC OOD DETECTION
+# ─────────────────────────────
 @router.post("/predict")
-async def predict(file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def predict(
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
     try:
         if not file.content_type.startswith('image/'):
             raise HTTPException(status_code=400, detail="Le fichier doit être une image")
+        
+        # Charger et transformer l'image
         image = Image.open(io.BytesIO(await file.read())).convert("RGB")
         tensor = transform(image).unsqueeze(0)
+        
         with torch.no_grad():
             outputs = model(tensor)
             probs = torch.softmax(outputs, dim=1)[0]
+            
+            # Calculer métriques OOD
+            max_prob = torch.max(probs).item()
+            entropy = -torch.sum(probs * torch.log(probs + 1e-8)).item()
+            
             pred = int(torch.argmax(probs).item())
-        probabilites = {CLASS_NAMES[i]: f"{float(probs[i]) * 100:.2f}%" for i in range(len(CLASS_NAMES))}
-        probabilites = dict(sorted(probabilites.items(), key=lambda x: float(x[1][:-1]), reverse=True))
+        
+        # ───────────── OOD DETECTION ─────────────
+        is_out_of_context = (max_prob < OOD_CONFIDENCE_THRESHOLD or 
+                             entropy > OOD_ENTROPY_THRESHOLD)
+        
+        if is_out_of_context:
+            # Image hors contexte (pas une lésion cutanée)
+            return {
+                "success": True,
+                "is_skin_lesion": False,
+                "prediction": "Hors contexte",
+                "message": "L'image ne correspond pas à une lésion cutanée. Veuillez uploader une image de peau.",
+                "confidence": f"{max_prob * 100:.2f}%",
+                "entropy": round(entropy, 4),
+                "thresholds": {
+                    "confidence_threshold": OOD_CONFIDENCE_THRESHOLD,
+                    "entropy_threshold": OOD_ENTROPY_THRESHOLD
+                }
+            }
+        
+        # ───────────── PRÉDICTION NORMALE ─────────────
+        probabilites = {CLASS_NAMES[i]: f"{float(probs[i]) * 100:.2f}%" 
+                        for i in range(len(CLASS_NAMES))}
+        probabilites = dict(sorted(probabilites.items(), 
+                                   key=lambda x: float(x[1][:-1]), reverse=True))
+        
         predicted_disease = CLASS_NAMES[pred]
         confidence = float(probs[pred]) * 100
+        
+        # Sauvegarder dans l'historique
         try:
             maladie = db.query(Maladie).filter(Maladie.nom == predicted_disease).first()
             if not maladie:
                 maladie = Maladie(nom=predicted_disease)
                 db.add(maladie)
                 db.flush()
+            
             history = PredictionHistory(
-                user_id=current_user.id, maladie_id=maladie.id, predicted_disease=predicted_disease,
-                confidence=confidence, all_probabilities=json.dumps(probabilites, ensure_ascii=False),
+                user_id=current_user.id, 
+                maladie_id=maladie.id, 
+                predicted_disease=predicted_disease,
+                confidence=confidence, 
+                all_probabilities=json.dumps(probabilites, ensure_ascii=False),
                 created_at=datetime.utcnow()
             )
             db.add(history)
             db.commit()
-            print(f"✅ [HISTORIQUE] {current_user.email} a prédit: {predicted_disease} ({confidence:.1f}%)")
+            logger.info(f"✅ [HISTORIQUE] {current_user.email} a prédit: {predicted_disease} ({confidence:.1f}%)")
         except Exception as e:
-            print(f"⚠️ [ERREUR] Sauvegarde historique: {e}")
+            logger.warning(f"⚠️ [ERREUR] Sauvegarde historique: {e}")
             db.rollback()
-        return {"success": True, "maladie": predicted_disease, "confiance": f"{confidence:.2f}%",
-                "probabilites": probabilites, "maladie_id": pred, "maladie_nom": predicted_disease}
+        
+        return {
+            "success": True,
+            "is_skin_lesion": True,
+            "prediction": predicted_disease,
+            "confidence": f"{confidence:.2f}%",
+            "confidence_raw": confidence,
+            "entropy": round(entropy, 4),
+            "probabilities": probabilites,
+            "maladie_id": pred,
+            "maladie_nom": predicted_disease
+        }
+        
     except Exception as e:
-        print(f"❌ Erreur prédiction: {e}")
+        logger.error(f"❌ Erreur prédiction: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
 
+
+
+    # ─────────────────────────────
+# OOD CALIBRATION (optionnel)
+# ─────────────────────────────
+@router.get("/ood/calibrate")
+async def calibrate_ood_thresholds(db: Session = Depends(get_db)):
+    """
+    Endpoint pour calculer les seuils OOD recommandés
+    (à utiliser pendant le développement uniquement)
+    """
+    # Tu peux charger ton test loader ici si disponible
+    # Sinon, retourne les valeurs par défaut
+    return {
+        "recommended_thresholds": {
+            "confidence_threshold": OOD_CONFIDENCE_THRESHOLD,
+            "entropy_threshold": OOD_ENTROPY_THRESHOLD
+        },
+        "interpretation": {
+            "confidence_threshold": "Si max_prob < seuil → image hors contexte",
+            "entropy_threshold": "Si entropy > seuil → image hors contexte"
+        },
+        "note": "Ces seuils sont basés sur la calibration du test set"
+    }
 # ─────────────────────────────
 # HISTORIQUE
 # ─────────────────────────────

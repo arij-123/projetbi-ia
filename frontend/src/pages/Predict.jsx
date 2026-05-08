@@ -44,42 +44,66 @@ export default function Predict() {
   const handleFileInput = useCallback((e) => handleFileSelect(e.target.files[0]), [handleFileSelect]);
 
   const analyzeImage = async () => {
-    if (!selectedFile) return;
-    setIsAnalyzing(true);
-    setError(null);
-    setRecommendations(null);
+  if (!selectedFile) return;
+  setIsAnalyzing(true);
+  setError(null);
+  setRecommendations(null);
 
-    try {
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-      const token = localStorage.getItem("token");
+  try {
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    const token = localStorage.getItem("token");
 
-      const response = await axios.post("http://localhost:8000/api/predict", formData, {
-        headers: { "Content-Type": "multipart/form-data", Authorization: `Bearer ${token}` },
+    const response = await axios.post("http://localhost:8000/api/predict", formData, {
+      headers: { "Content-Type": "multipart/form-data", Authorization: `Bearer ${token}` },
+    });
+
+    const apiResults = response.data;
+    
+    // 🆕 Gestion du cas OOD (Hors contexte)
+    if (apiResults.is_skin_lesion === false) {
+      setResults({
+        isSkinLesion: false,
+        message: apiResults.message || "L'image n'est pas reconnue comme une lésion cutanée",
+        confidence: apiResults.confidence,
+        entropy: apiResults.entropy
       });
-
-      const apiResults = response.data;
-      setResults({ maladie: apiResults.maladie, confiance: apiResults.confiance, probabilites: apiResults.probabilites });
-
-      setLoadingRecommendations(true);
-      try {
-        const user = JSON.parse(localStorage.getItem("user") || "{}");
-        const url = `http://localhost:8000/api/recommend/${encodeURIComponent(apiResults.maladie)}${user.city ? `?city=${user.city}` : ""}`;
-        const rec = await axios.get(url);
-        setRecommendations(rec.data);
-      } catch {
-        setRecommendations({ error: "Impossible de charger les recommandations" });
-      } finally {
-        setLoadingRecommendations(false);
-      }
-    } catch (err) {
-      if (err.response) setError(`Erreur serveur: ${err.response.data.detail || "Service indisponible"}`);
-      else if (err.request) setError("Backend non disponible. Veuillez démarrer le serveur Python (port 8000).");
-      else setError("Erreur lors de l'analyse. Veuillez réessayer.");
-    } finally {
+      setRecommendations(null);
       setIsAnalyzing(false);
+      return;
     }
-  };
+
+    // ✅ Cas normal : lésion cutanée détectée
+    setResults({
+      isSkinLesion: true,
+      maladie: apiResults.prediction || apiResults.maladie,  // fallback pour compatibilité
+      confiance: apiResults.confidence,
+      confidence_raw: apiResults.confidence_raw,
+      probabilites: apiResults.probabilites,
+      entropy: apiResults.entropy
+    });
+
+    // Charger les recommandations
+    setLoadingRecommendations(true);
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const maladieName = apiResults.prediction || apiResults.maladie;
+      const url = `http://localhost:8000/api/recommend/${encodeURIComponent(maladieName)}${user.city ? `?city=${user.city}` : ""}`;
+      const rec = await axios.get(url);
+      setRecommendations(rec.data);
+    } catch {
+      setRecommendations({ error: "Impossible de charger les recommandations" });
+    } finally {
+      setLoadingRecommendations(false);
+    }
+  } catch (err) {
+    if (err.response) setError(`Erreur serveur: ${err.response.data.detail || "Service indisponible"}`);
+    else if (err.request) setError("Backend non disponible. Veuillez démarrer le serveur Python (port 8000).");
+    else setError("Erreur lors de l'analyse. Veuillez réessayer.");
+  } finally {
+    setIsAnalyzing(false);
+  }
+};
 
   const resetAnalysis = () => {
     setSelectedFile(null); setPreview(null);
@@ -179,56 +203,82 @@ export default function Predict() {
                 <h2 style={S.panelTitle}>Résultats de l'analyse</h2>
               </div>
 
-              {results ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-                  {/* Main diagnosis */}
-                  <div style={S.diagnosisCard}>
-                    <div style={{ ...S.diagnosisDot, background: getConfidenceColor(parseFloat(results.confiance)), boxShadow: `0 0 10px ${getConfidenceColor(parseFloat(results.confiance))}` }} />
-                    <div>
-                      <p style={S.diagnosisLabel}>Diagnostic principal</p>
-                      <p style={S.diagnosisName}>{results.maladie}</p>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
-                        <span style={{ ...S.confidenceBadge, color: getConfidenceColor(parseFloat(results.confiance)), borderColor: `${getConfidenceColor(parseFloat(results.confiance))}44`, background: `${getConfidenceColor(parseFloat(results.confiance))}11` }}>
-                          {results.confiance} confiance
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+             {results ? (
+  <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+    
+    {/* 🆕 Cas OOD (Hors contexte) */}
+    {!results.isSkinLesion ? (
+      <div style={S.oodCard}>
+        <div style={S.oodIcon}>⚠️</div>
+        <h3 style={S.oodTitle}>Image non reconnue</h3>
+        <p style={S.oodMessage}>{results.message}</p>
+        <div style={S.oodDetails}>
+          <span style={S.oodBadge}>Confiance: {results.confiance || results.confidence}</span>
+          {results.entropy && <span style={S.oodBadge}>Entropie: {results.entropy}</span>}
+        </div>
+        <p style={S.oodTip}>
+          💡 Conseil: Veuillez uploader une photo nette d'une lésion cutanée<br/>
+          (bonne luminosité, zone ciblée, sans flou)
+        </p>
+      </div>
+    ) : (
+      <>
+        {/* Main diagnosis - Version existante */}
+        <div style={S.diagnosisCard}>
+          <div style={{ ...S.diagnosisDot, background: getConfidenceColor(parseFloat(results.confiance)), boxShadow: `0 0 10px ${getConfidenceColor(parseFloat(results.confiance))}` }} />
+          <div>
+            <p style={S.diagnosisLabel}>Diagnostic principal</p>
+            <p style={S.diagnosisName}>{results.maladie}</p>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px", flexWrap: "wrap" }}>
+              <span style={{ ...S.confidenceBadge, color: getConfidenceColor(parseFloat(results.confiance)), borderColor: `${getConfidenceColor(parseFloat(results.confiance))}44`, background: `${getConfidenceColor(parseFloat(results.confiance))}11` }}>
+                {results.confiance} confiance
+              </span>
+              {results.entropy !== undefined && (
+                <span style={{ ...S.entropyBadge }}>
+                  📊 Entropie: {results.entropy}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
 
-                  {/* Probabilities */}
-                  {results.probabilites && (
-                    <div>
-                      <p style={S.probTitle}>Probabilités détaillées</p>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                        {Object.entries(results.probabilites).map(([disease, prob]) => {
-                          const isMain = disease === results.maladie;
-                          return (
-                            <div key={disease} style={S.probRow}>
-                              <span style={{ ...S.probName, color: isMain ? "#22d3a5" : "#64748b" }}>
-                                {isMain && "● "}{disease}
-                              </span>
-                              <div style={S.probBarWrap}>
-                                <div style={{
-                                  ...S.probBarFill,
-                                  width: prob,
-                                  background: isMain ? "linear-gradient(90deg,#22d3a5,#34d399)" : "rgba(148,163,184,0.18)",
-                                }} />
-                              </div>
-                              <span style={{ ...S.probVal, color: isMain ? "#22d3a5" : "#475569" }}>{prob}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
+        {/* Probabilities - Version existante */}
+        {results.probabilites && (
+          <div>
+            <p style={S.probTitle}>Probabilités détaillées</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {Object.entries(results.probabilites).map(([disease, prob]) => {
+                const isMain = disease === results.maladie;
+                return (
+                  <div key={disease} style={S.probRow}>
+                    <span style={{ ...S.probName, color: isMain ? "#22d3a5" : "#64748b" }}>
+                      {isMain && "● "}{disease}
+                    </span>
+                    <div style={S.probBarWrap}>
+                      <div style={{
+                        ...S.probBarFill,
+                        width: prob,
+                        background: isMain ? "linear-gradient(90deg,#22d3a5,#34d399)" : "rgba(148,163,184,0.18)",
+                      }} />
                     </div>
-                  )}
-
-                  {/* Disclaimer */}
-                  <div style={S.disclaimer}>
-                    <span style={S.disclaimerIcon}>⚠</span>
-                    <p style={S.disclaimerText}>Ce diagnostic est préliminaire et ne remplace pas un avis médical professionnel.</p>
+                    <span style={{ ...S.probVal, color: isMain ? "#22d3a5" : "#475569" }}>{prob}</span>
                   </div>
-                </div>
-              ) : (
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Disclaimer */}
+        <div style={S.disclaimer}>
+          <span style={S.disclaimerIcon}>⚠</span>
+          <p style={S.disclaimerText}>Ce diagnostic est préliminaire et ne remplace pas un avis médical professionnel.</p>
+        </div>
+      </>
+    )}
+  </div>
+) : (
+  // Empty state - inchangé
                 <div style={S.emptyResults}>
                   <div style={S.emptyIconWrap}>
                     {isAnalyzing ? (
@@ -461,4 +511,61 @@ const S = {
   soinInstructions: { fontSize: "12px", color: "#64748b", lineHeight: "1.6" },
   soinTags: { display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "10px" },
   soinTag: { padding: "3px 10px", background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: "100px", fontSize: "11px", color: "#a5b4fc", fontWeight: "500" },
+  // Ajouter à l'objet S existant
+oodCard: {
+  padding: "32px 24px",
+  background: "rgba(251,191,36,0.08)",
+  border: "1px solid rgba(251,191,36,0.25)",
+  borderRadius: "20px",
+  textAlign: "center",
+},
+oodIcon: {
+  fontSize: "48px",
+  display: "block",
+  marginBottom: "16px",
+},
+oodTitle: {
+  fontSize: "20px",
+  fontWeight: "800",
+  color: "#fbbf24",
+  marginBottom: "12px",
+},
+oodMessage: {
+  fontSize: "14px",
+  color: "#94a3b8",
+  marginBottom: "20px",
+  lineHeight: "1.5",
+},
+oodDetails: {
+  display: "flex",
+  justifyContent: "center",
+  gap: "12px",
+  marginBottom: "24px",
+  flexWrap: "wrap",
+},
+oodBadge: {
+  padding: "4px 12px",
+  background: "rgba(255,255,255,0.06)",
+  borderRadius: "100px",
+  fontSize: "12px",
+  color: "#64748b",
+  fontFamily: "monospace",
+},
+oodTip: {
+  fontSize: "12px",
+  color: "#475569",
+  borderTop: "1px solid rgba(255,255,255,0.06)",
+  paddingTop: "20px",
+  marginTop: "8px",
+  lineHeight: "1.5",
+},
+entropyBadge: {
+  padding: "3px 12px",
+  background: "rgba(99,102,241,0.12)",
+  border: "1px solid rgba(99,102,241,0.25)",
+  borderRadius: "100px",
+  fontSize: "11px",
+  fontWeight: "500",
+  color: "#a5b4fc",
+},
 };
